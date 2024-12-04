@@ -1,4 +1,4 @@
-# Falco Naumanni Presence Detection
+# On-device Falco naumanni presence detection
 
 This repository contains MATLAB code and AudioMoth firmware modifications for detecting the presence of the _Falco naumanni_ species using audio recordings collected with AudioMoth device. 
 The project integrates data curation, neural network training, and embedded implementation of the trained model on an AudioMoth device.
@@ -31,7 +31,7 @@ This folder contains the code for preparing the dataset, training the neural net
 This folder contains the modified AudioMoth firmware based on the [Open Acoustic Devices AudioMoth Basic Firmware v1.3.0](https://github.com/OpenAcousticDevices/AudioMoth-Firmware-Basic/releases/tag/1.3.0). 
 [Open Acoustic Devices code for AudioMoth Basic Firmware v1.3.0](https://github.com/OpenAcousticDevices/AudioMoth-Firmware-Basic/tree/1.3.0)
 
-The modifications include:
+The modifications of source code in `src` include:
 - **`audiomoth.c`**: Core functionality remains unchanged.
 - **`main.c`**: Updated to integrate the trained neural network for real-time classification of audio recordings.
 
@@ -39,6 +39,8 @@ The modified firmware enables the AudioMoth to:
 1. Record audio.
 2. Process audio segments using the embedded neural network.
 3. Output species presence detection results.
+
+The built binary file, ready to be flashed to the device, is also included.
 
 ---
 
