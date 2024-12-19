@@ -44,8 +44,8 @@
 #define NUMBER_OF_SAMPLES_IN_DMA_TRANSFER   1024
 #define NUMBER_OF_BUFFERS_TO_SKIP           1
 
-// Introduced constants:
-#define NUMBER_OF_SUPERBUFFERS				8
+// ---> Introduced constants:
+#define NUMBER_OF_SUPERBUFFERS				8 // aggregation of 16 buffers
 #define NUMBER_OF_BUFFERS_IN_SUPERBUFFER	(NUMBER_OF_BUFFERS / NUMBER_OF_SUPERBUFFERS)
 #define NUMBER_OF_SAMPLES_IN_SUPERBUFFER	NUMBER_OF_SAMPLES_IN_BUFFER * NUMBER_OF_BUFFERS_IN_SUPERBUFFER
 
@@ -53,10 +53,11 @@
 #define NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC	12
 #define NBANKS								41
 #define INIT_COUNTDOWN						1230
-#define THRESHOLD_DETECTION					0.3f
+#define THRESHOLD_DETECTION					0.4f
 #define DETECTION_VALUE						THRESHOLD_DETECTION * NUMBER_OF_BUFFERS_IN_SUPERBUFFER
 
 #define MAX_INT_VALUE						32767
+// <---
 
 /* WAV header constant */
 
@@ -160,7 +161,7 @@ static wavHeader_t wavHeader = {
 };
 
 
-/* Lesser Kestrel recognition */
+/* ---> Lesser Kestrel recognition */
 
 static float32_t* buffersMFCC[NUMBER_OF_BUFFERS_MFCC];
 static float32_t MK4[NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC];
@@ -174,7 +175,7 @@ static void deltas(float32_t **buffers);
 static float32_t neuralNetwork(float32_t *bufferMFCC);
 
 arm_rfft_fast_instance_f32 realFFTinstance;
-
+// <---
 
 void setHeaderDetails(uint32_t sampleRate, uint32_t numberOfSamples) {
 
@@ -301,11 +302,11 @@ static const configSettings_t defaultConfigSettings = {
     .clockDivider = 4,
     .acquisitionCycles = 16,
     .oversampleRate = 1,
-    //.sampleRate = 352800, // modified
-    .sampleRate = 256000,
+    //.sampleRate = 384000, // corresponding to 48kHz, modified
+    .sampleRate = 256000,  // corresponding to 32kHz
     .sampleRateDivider = 8,
     .sleepDuration = 0,
-    .recordDuration = 3600, //modified?
+    .recordDuration = 60, 
     .enableLED = 1,
     .activeStartStopPeriods = 0,
     .startStopPeriods = {
@@ -719,7 +720,7 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
         buffers[i] = buffers[i - 1] + NUMBER_OF_SAMPLES_IN_BUFFER;
     }
 
-    // Introduced: 
+    // ---> Introduced: 
     buffersMFCC[0] = (float32_t*)malloc(sizeof(float32_t) * NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC);
     for (int i = 1; i < NUMBER_OF_BUFFERS_MFCC; i += 1) {
 		if (i==3){
@@ -729,6 +730,7 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
 			buffersMFCC[i] = buffersMFCC[i - 1] + NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC;
 		}
 	}
+    // <---
 
     /* Calculate the bits to shift */
 
@@ -782,7 +784,7 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
 
     RETURN_ON_ERROR(AudioMoth_openFile(fileName));
 
-    RETURN_ON_ERROR(AudioMoth_closeFile(fileName));
+    RETURN_ON_ERROR(AudioMoth_closeFile(fileName)); // introduced
 
     AudioMoth_setRedLED(false);
 
@@ -806,36 +808,24 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
 
         while (readBuffer != writeBuffer && samplesWritten < numberOfSamples + numberOfSamplesInHeader && !switchPositionChanged /*&& !batteryVoltageLow*/) {
 
-            // Shift buffers to the left (introduced code):
-
-			for (int j = 0; j <NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC; j+= 1){
+            /* --> Introduced code: MFCC and Neural Network */
+            // Shift buffers to the left 
+	    for (int j = 0; j <NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC; j+= 1){
 				*(buffersMFCC[0]+j) = *(buffersMFCC[1]+j);
 				*(buffersMFCC[1]+j) = *(buffersMFCC[2]+j);
 				*(buffersMFCC[2]+j) = *(buffersMFCC[3]+j);
 				*(buffersMFCC[3]+j) = *(buffersMFCC[NUMBER_OF_BUFFERS_MFCC-1]+j);
-			}
+	    }
+			
+	    //Calculate MFCCs corresponding buffer
+	    MFCC(buffers[readBuffer], buffersMFCC[NUMBER_OF_BUFFERS_MFCC-1], readBuffer);
 
-// To debug the system, all needed information was saved as a text file in microSD card
-//			FIL fix;
-//			f_open(&fix,"dataINbuf.txt", FA_OPEN_APPEND | FA_WRITE);
-//		    for (int i = 0; i < NUMBER_OF_SAMPLES_IN_BUFFER; i+= 1){
-//		    	char str[8];
-//		    	sprintf(str, "%d, ", (int)(*(buffers[readBuffer]+i)));
-//		        f_puts(str,&fix);
-//		    }
-//		    char str[2];
-//			sprintf(str, "\n");
-//		    f_puts(str,&fix);
-//		    f_close(&fix);
+	    //Calculate deltas
+	    deltas(buffersMFCC);
 
-			//Calculate MFCCs corresponding buffer
-			MFCC(buffers[readBuffer], buffersMFCC[NUMBER_OF_BUFFERS_MFCC-1], readBuffer);
-
-			//Calculate deltas
-			deltas(buffersMFCC);
-
-			//Apply neural network
-			keep_prob += neuralNetwork(buffersMFCC[2]);
+	    //Apply neural network
+	    keep_prob += neuralNetwork(buffersMFCC[2]);
+	    // <---
 
 
 	    /* Write the appropriate number of bytes to the SD card */
@@ -843,30 +833,33 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
             uint32_t numberOfSamplesToWrite = 0;
 
             //if (buffersProcessed >= NUMBER_OF_BUFFERS_TO_SKIP) {
-                // modified:
+                //numberOfSamplesToWrite = MIN(numberOfSamples + numberOfSamplesInHeader - samplesWritten, NUMBER_OF_SAMPLES_IN_BUFFER);
+                // modified: write complete superbuffer
                 numberOfSamplesToWrite = MIN(numberOfSamples + numberOfSamplesInHeader - samplesWritten, NUMBER_OF_BUFFERS_IN_SUPERBUFFER * NUMBER_OF_SAMPLES_IN_BUFFER);
 
             //}
 
-           // Introduced code:
-	   if ((readBuffer+1) % NUMBER_OF_BUFFERS_IN_SUPERBUFFER == 0){
+           // --> Introduced code:
+	   if ((readBuffer+1) % NUMBER_OF_BUFFERS_IN_SUPERBUFFER == 0){ // for each superbuffer
 
 				AudioMoth_setRedLED(true);
 
 				RETURN_ON_ERROR(AudioMoth_appendFile(fileName));
-				RETURN_ON_ERROR(AudioMoth_writeToFile(buffers[readBuffer-NUMBER_OF_BUFFERS_IN_SUPERBUFFER+1], 2 * numberOfSamplesToWrite));
+				RETURN_ON_ERROR(AudioMoth_writeToFile(buffers[readBuffer-NUMBER_OF_BUFFERS_IN_SUPERBUFFER+1], 2 * numberOfSamplesToWrite)); // write complete superbuffer
+				//RETURN_ON_ERROR(AudioMoth_writeToFile(buffers[readBuffer], 2 * numberOfSamplesToWrite));
 				RETURN_ON_ERROR(AudioMoth_closeFile());
 
 				/* Increment buffer counters */
+				
+				//readBuffer = (readBuffer + 1) & (NUMBER_OF_BUFFERS - 1);
 
 				samplesWritten += numberOfSamplesToWrite;
 
 				buffersProcessed += 1;
 
-                // Log detections if probability exceeds threshold
+                                // Log detections if probability exceeds threshold
 				if (keep_prob > (float32_t)(DETECTION_VALUE)){
 
-					//countdown = INIT_COUNTDOWN;
 					FIL callfile; //File to keep detections
 					f_open(&callfile,"calls.txt", FA_OPEN_APPEND | FA_WRITE);
 					uint32_t currentTime;
@@ -881,15 +874,21 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
 					AudioMoth_setGreenLED(true);
 
 				} else {
-					//countdown = (countdown - 1);
-
 					AudioMoth_setGreenLED(false);
 				}
 				keep_prob = 0;
 
             }
+            // <---
+            
+            /* Increment buffer counters */
+            
+	    readBuffer = (readBuffer + 1) & (NUMBER_OF_BUFFERS - 1);
+	    
+	    //samplesWritten += numberOfSamplesToWrite;
 
-			readBuffer = (readBuffer + 1) & (NUMBER_OF_BUFFERS - 1);
+	    //buffersProcessed += 1;
+	    
 
             /* Clear LED */
 
@@ -914,11 +913,11 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
 
     /* Disable battery check */
 
-	if (configSettings->enableBatteryCheck ) {
+    if (configSettings->enableBatteryCheck ) {
 
-		AudioMoth_disableBatteryMonitor();
+	AudioMoth_disableBatteryMonitor();
 
-	}
+    }
 
     /* Initialise the WAV header */
 
@@ -937,8 +936,10 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
     }
 
 
-    RETURN_ON_ERROR(AudioMoth_appendFile(fileName));
+    RETURN_ON_ERROR(AudioMoth_appendFile(fileName)); // introduced
+    
     RETURN_ON_ERROR(AudioMoth_seekInFile(0));
+    
     RETURN_ON_ERROR(AudioMoth_writeToFile(&wavHeader, sizeof(wavHeader)));
 
     /* Close the file */
