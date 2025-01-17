@@ -161,8 +161,7 @@ static wavHeader_t wavHeader = {
 };
 
 
-/* ---> Lesser Kestrel recognition */
-
+/* ---> Introduced: for Lesser Kestrel recognition */
 static float32_t* buffersMFCC[NUMBER_OF_BUFFERS_MFCC];
 static float32_t MK4[NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC];
 static float32_t MK3[NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC];
