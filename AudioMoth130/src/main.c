@@ -845,7 +845,7 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
 				AudioMoth_setRedLED(true);
 
 				RETURN_ON_ERROR(AudioMoth_appendFile(fileName));
-				RETURN_ON_ERROR(AudioMoth_writeToFile(buffers[readBuffer-NUMBER_OF_BUFFERS_IN_SUPERBUFFER+1], 2 * numberOfSamplesToWrite)); // write complete superbuffer
+				RETURN_ON_ERROR(AudioMoth_writeToFile(buffers[readBuffer-NUMBER_OF_BUFFERS_IN_SUPERBUFFER+1], 2 * numberOfSamplesToWrite)); // modified. write complete superbuffer
 				//RETURN_ON_ERROR(AudioMoth_writeToFile(buffers[readBuffer], 2 * numberOfSamplesToWrite));
 				RETURN_ON_ERROR(AudioMoth_closeFile());
 
@@ -885,9 +885,9 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
             
 	    readBuffer = (readBuffer + 1) & (NUMBER_OF_BUFFERS - 1);
 	    
-	    //samplesWritten += numberOfSamplesToWrite;
+	    //samplesWritten += numberOfSamplesToWrite; // modified. Already incremented
 
-	    //buffersProcessed += 1;
+	    //buffersProcessed += 1; // modified. Already incremented
 	    
 
             /* Clear LED */
