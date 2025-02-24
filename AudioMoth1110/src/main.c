@@ -3155,29 +3155,6 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 
         while (readBuffer != writeBuffer && samplesWritten < numberOfSamples + numberOfSamplesInHeader && !microphoneChanged && !switchPositionChanged && !magneticSwitch && !supplyVoltageLow) {
        
-       /* (funciona)
-      FIL callfile;
-      FRESULT res = f_open(&callfile, "calls.txt", FA_WRITE | FA_OPEN_APPEND);
-      if (res != FR_OK) {
-          printf("Error opening file: %d\n", res);  // Error al abrir el archivo
-          return;
-      }
-      
-      uint32_t currentTime;
-      AudioMoth_getTime(&currentTime, NULL);  // Obtener la hora
-      time_t rawtime = currentTime + configSettings->timezoneHours * 3600 + configSettings->timezoneMinutes * 60;
-      struct tm *time = gmtime(&rawtime);
-      
-      char str[22];
-      sprintf(str, "%04d/%02d/%02d %02d:%02d:%02d\n", 1900 + time->tm_year, time->tm_mon + 1, time->tm_mday, time->tm_hour, time->tm_min, time->tm_sec);
-      
-      UINT bytesWritten;
-      res = f_write(&callfile, str, strlen(str), &bytesWritten);
-      if (res != FR_OK) {
-          printf("Error writing to file: %d\n", res);  
-      }
-      f_close(&callfile); */
-      
             /* --> Introduced code: MFCC and Neural Network */
             // Shift buffers to the left 
 	    for (int j = 0; j <NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC; j+= 1){
