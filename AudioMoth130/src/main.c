@@ -10,10 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <complex.h>
+//#include <complex.h>
 #include "ff.h"
-#include "ffconf.h"
-#include "math.h"
+//#include "ffconf.h"
+#define __FPU_PRESENT       1    /*!< FPU present */
+//#include "math.h"
 #include "arm_math.h"
 
 #include "audioMoth.h"
@@ -865,7 +866,7 @@ static AM_recordingState_t makeRecording(uint32_t currentTime, uint32_t recordDu
 					AudioMoth_getTime(&currentTime, NULL);
 					time_t rawtime = currentTime + configSettings->timezoneHours * 3600 + configSettings->timezoneMinutes * 60;
 					struct tm *time = gmtime(&rawtime);
-					char str[20];
+					char str[21];
 					sprintf(str, "%04d/%02d/%02d %02d:%02d:%02d \n", 1900 + time->tm_year, time->tm_mon + 1, time->tm_mday, time->tm_hour, time->tm_min, time->tm_sec);
 					f_puts(str,&callfile);
 					f_close(&callfile);
