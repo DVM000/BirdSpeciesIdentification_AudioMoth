@@ -4,6 +4,8 @@
  * June 2017
  *****************************************************************************/
 
+// Changes with respect to original code are marked as 'Introduced' or 'Modified'
+
 #include <time.h>
 #include <math.h>
 #include <stdio.h>
@@ -3077,8 +3079,6 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 
     FLASH_LED_AND_RETURN_ON_ERROR(AudioMoth_seekInFile(0));
     
-    //RETURN_BOOL_ON_ERROR(AudioMoth_closeFile()); // introduced
-
     AudioMoth_setRedLED(false);
 
     /* Measure the time difference from the start time */
@@ -3147,8 +3147,6 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 
     AudioMoth_startMicrophoneSamples(configSettings->sampleRate);
     
-    float32_t keep_prob = 0;  // Introduced
-
     /* Main recording loop */
 
     while (samplesWritten < numberOfSamples + numberOfSamplesInHeader && !microphoneChanged && !switchPositionChanged && !magneticSwitch && !supplyVoltageLow) {
@@ -3172,7 +3170,6 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 
 	    //Apply neural network
 	    float32_t NNoutput = neuralNetwork(buffersMFCC[2]);
-	    keep_prob += NNoutput;
 	    uint32_t BufferGreen = 0;
 	    // <---
 
@@ -3216,9 +3213,7 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 
                     totalNumberOfCompressedSamples += (numberOfCompressedBuffers - 1) * COMPRESSION_BUFFER_SIZE_IN_BYTES / NUMBER_OF_BYTES_IN_SAMPLE;
                     
-                    //RETURN_BOOL_ON_ERROR(AudioMoth_appendFile(filename)); // introduced
                     FLASH_LED_AND_RETURN_ON_ERROR(AudioMoth_writeToFile(compressionBuffer, COMPRESSION_BUFFER_SIZE_IN_BYTES));
-                    //RETURN_BOOL_ON_ERROR(AudioMoth_closeFile()); // introduced
                     
                     numberOfCompressedBuffers = 0;
 
@@ -3232,10 +3227,8 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
                     if ((readBuffer+1) % NUMBER_OF_BUFFERS_IN_SUPERBUFFER == 0){ // for each superbuffer
                       if (buffersProcessed == 0) memcpy(buffers[readBuffer], &wavHeader, sizeof(wavHeader_t));
                     
-                      //RETURN_BOOL_ON_ERROR(AudioMoth_appendFile(filename)); // introduced
                       //FLASH_LED_AND_RETURN_ON_ERROR(AudioMoth_writeToFile(buffers[readBuffer], NUMBER_OF_BYTES_IN_SAMPLE * numberOfSamplesToWrite));
                       FLASH_LED_AND_RETURN_ON_ERROR(AudioMoth_writeToFile(buffers[readBuffer-NUMBER_OF_BUFFERS_IN_SUPERBUFFER+1], NUMBER_OF_BYTES_IN_SAMPLE * numberOfSamplesToWrite)); // modified. Write complete superbuffer
-                      //RETURN_BOOL_ON_ERROR(AudioMoth_closeFile()); // introduced  
                       
                       samplesWritten += numberOfSamplesToWrite;
 
@@ -3258,9 +3251,7 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 
                         if (writeHeader) memcpy(compressionBuffer, &wavHeader, sizeof(wavHeader_t));
                         
-                        //RETURN_BOOL_ON_ERROR(AudioMoth_appendFile(filename)); // introduced
                         FLASH_LED_AND_RETURN_ON_ERROR(AudioMoth_writeToFile(compressionBuffer, NUMBER_OF_BYTES_IN_SAMPLE * numberOfSamples));
-                        //RETURN_BOOL_ON_ERROR(AudioMoth_closeFile()); // introduced  
                         
                         if (writeHeader) memset(compressionBuffer, 0, sizeof(wavHeader_t));
 
@@ -3271,35 +3262,8 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
                     }
 
                 }
-                
-              /* // --> Introduced code: calculate NN output averaged over 16 frames and write into call.txt file:
-	       if ((readBuffer+1) % NUMBER_OF_BUFFERS_IN_SUPERBUFFER == 0){ // for each superbuffer
 
-                                    // Log detections if probability exceeds threshold
-				    if (keep_prob > (float32_t)(DETECTION_VALUE)){
-
-					    FIL callfile; //File to keep detections
-					    f_open(&callfile,"calls.txt", FA_OPEN_APPEND | FA_WRITE);
-					    uint32_t currentTime;
-					    AudioMoth_getTime(&currentTime, NULL);
-					    time_t rawtime = currentTime + configSettings->timezoneHours * 3600 + configSettings->timezoneMinutes * 60;
-					    struct tm *time = gmtime(&rawtime);
-					    char str[21];
-					    sprintf(str, "%04d/%02d/%02d %02d:%02d:%02d \n", 1900 + time->tm_year, time->tm_mon + 1, time->tm_mday, time->tm_hour, time->tm_min, time->tm_sec);
-					    f_puts(str,&callfile);
-					    f_close(&callfile);
-
-					    AudioMoth_setGreenLED(true);
-
-				    } else {
-					    AudioMoth_setGreenLED(false);
-				    }
-				    keep_prob = 0;
-
-                }
-                // <---*/
-
-                // Log detections if probability exceeds threshold
+                // --> Introduced code: Log detections if probability exceeds threshold
 		if (NNoutput > (float32_t)(0.5f)){
 					    FIL callfile; //File to keep detections
 					    f_open(&callfile,"calls.txt", FA_OPEN_APPEND | FA_WRITE);
@@ -3316,11 +3280,11 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 					    BufferGreen = readBuffer;
 
 				    } 
-		//if (((readBuffer+1) % 10*NUMBER_OF_BUFFERS_IN_SUPERBUFFER == 0) && (NNoutput < (float32_t)(0.5f))) { // for each superbuffer{
+		//if (((readBuffer+1) % NUMBER_OF_BUFFERS_IN_SUPERBUFFER == 0) && (NNoutput < (float32_t)(0.5f))) { // for each superbuffer{
 		if ((readBuffer - BufferGreen) > NUMBER_OF_BUFFERS_IN_SUPERBUFFER) {
 					    AudioMoth_setGreenLED(false);
 		  }
-
+	       // <--
 
                 /* Clear LED */
 
@@ -3333,9 +3297,9 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 
             readBuffer = (readBuffer + 1) & (NUMBER_OF_BUFFERS - 1);
 
-            //samplesWritten += numberOfSamplesToWrite;
+            //samplesWritten += numberOfSamplesToWrite; // modified
 
-            //buffersProcessed += 1;
+            //buffersProcessed += 1; // modified
 
         }
 
@@ -3367,9 +3331,7 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 
         totalNumberOfCompressedSamples += (numberOfCompressedBuffers - 1) * COMPRESSION_BUFFER_SIZE_IN_BYTES / NUMBER_OF_BYTES_IN_SAMPLE;
        
-        //RETURN_BOOL_ON_ERROR(AudioMoth_appendFile(filename)); // introduced
         FLASH_LED_AND_RETURN_ON_ERROR(AudioMoth_writeToFile(compressionBuffer, COMPRESSION_BUFFER_SIZE_IN_BYTES));
-        //RETURN_BOOL_ON_ERROR(AudioMoth_closeFile()); // introduced
         
         /* Clear LED */
 
@@ -3404,9 +3366,7 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 
     uint32_t guanoDataSize = writeGuanoData((char*)compressionBuffer, configSettings, timeOfNextRecording + timeOffset, gpsLocationReceived, gpsLastFixLatitude, gpsLastFixLongitude, acousticLocationReceived, acousticLatitude, acousticLongitude, firmwareDescription, firmwareVersion, (uint8_t*)AM_UNIQUE_ID_START_ADDRESS, deploymentID, defaultDeploymentID, timeOffset > 0 ? newFilename : filename, extendedBatteryState, temperature, requestedFilterType);
 
-    //RETURN_BOOL_ON_ERROR(AudioMoth_appendFile(filename)); // introduced
     FLASH_LED_AND_RETURN_ON_ERROR(AudioMoth_writeToFile(compressionBuffer, guanoDataSize));
-    //RETURN_BOOL_ON_ERROR(AudioMoth_closeFile()); // introduced
     
     /* Initialise the WAV header */
 
@@ -3419,8 +3379,6 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
     /* Write the header */
 
     if (enableLED) AudioMoth_setRedLED(true);
-
-    //RETURN_BOOL_ON_ERROR(AudioMoth_appendFile(filename)); // introduced
 
     FLASH_LED_AND_RETURN_ON_ERROR(AudioMoth_seekInFile(0));
 
