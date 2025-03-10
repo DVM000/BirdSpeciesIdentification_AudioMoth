@@ -87,7 +87,7 @@
 #define NBANKS								41
 #define INIT_COUNTDOWN						1230
 #define THRESHOLD_DETECTION					0.5f
-#define DETECTION_VALUE						THRESHOLD_DETECTION * NUMBER_OF_BUFFERS_IN_SUPERBUFFER
+//#define DETECTION_VALUE						THRESHOLD_DETECTION * NUMBER_OF_BUFFERS_IN_SUPERBUFFER
 
 #define MAX_INT_VALUE						32767
 // <---
@@ -3264,7 +3264,7 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
                 }
 
                 // --> Introduced code: Log detections if probability exceeds threshold
-		if (NNoutput > (float32_t)(0.5f)){
+		if (NNoutput > (float32_t)(THRESHOLD_DETECTION)){
 					    FIL callfile; //File to keep detections
 					    f_open(&callfile,"calls.txt", FA_OPEN_APPEND | FA_WRITE);
 					    uint32_t currentTime;
@@ -3280,7 +3280,7 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 					    BufferGreen = readBuffer;
 
 				    } 
-		//if (((readBuffer+1) % NUMBER_OF_BUFFERS_IN_SUPERBUFFER == 0) && (NNoutput < (float32_t)(0.5f))) { // for each superbuffer{
+		//if (((readBuffer+1) % NUMBER_OF_BUFFERS_IN_SUPERBUFFER == 0) && (NNoutput < (float32_t)(THRESHOLD_DETECTION))) { // for each superbuffer{
 		if ((readBuffer - BufferGreen) > NUMBER_OF_BUFFERS_IN_SUPERBUFFER) {
 					    AudioMoth_setGreenLED(false);
 		  }
