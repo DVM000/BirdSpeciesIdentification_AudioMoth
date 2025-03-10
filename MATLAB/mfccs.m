@@ -3,13 +3,13 @@
 % for an input signal 'y'. It applies Mel-filter banks, Hamming windowing, and discrete cosine
 % transformation to obtain MFCCs and calculates deltas using a finite difference method.
 
-function [dctcoeff, delta] = mfccs(y, nbanks, twindow, fs)
+function [dctcoeff, delta] = mfccs(y, nbanks, twindow, fs, maxsegments)
 
 % Define the segment window length in samples
 lwindow = round(twindow * fs);
 
 % Calculate the number of windows needed and pad the signal if necessary
-nwindow = ceil(length(y) / lwindow);           % Number of segments
+nwindow = ceil(length(y) / lwindow); %min(ceil(length(y) / lwindow), maxsegments);           % Number of segments
 padLength = nwindow * lwindow - length(y);      % Calculate padding required
 y = [y, zeros(1, padLength)];                   % Pad the signal with zeros to fit exact window size
 

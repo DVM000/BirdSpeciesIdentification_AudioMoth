@@ -1,86 +1,150 @@
-% This script loads MP3 files, applies MFCCs, passes them through a pre-trained neural network,
-% and then thresholds the output to detect bird calls. Results are visualized for manual evaluation of detection.
+%  Neural Network Testing Script
 
-% Load the bird song audio file
-song = audioread('XC895702.wav');%'XC895705.wav'); % Example file
-bird = '\it Falco Naumanni'; % Label the bird species (LaTeX formatted for titles)
-song = song(:,1); % Use the first channel in case of stereo audio (mono audio)
+% A) Evaluate at file level. Steps:
+%   1. Load the data from complete files and prepare inputs/outputs.
+%   2. Evaluate network performance.
+%
+% B) Evaluate at 32-ms interval level. Steps:
+%   1. Load the data from segments and prepare inputs/outputs.
+%   2. Evaluate network performance.
 
-% Define sampling parameters
-fs = 32000;   % Desired sampling rate (lower resolution for processing)
-FS = 44100;   % Original sampling rate of the audio file
-[P, Q] = rat(fs / FS);  % Resampling ratio to convert the audio sample rate
-song = resample(song, P, Q); % Resample audio to match fs
 
-% Spectrogram parameters
-lwindow = 1024; % Window size for spectrogram
-T = (length(song)-1) / fs;  % Duration of the song in seconds
-t = 0:1/fs:(length(song)-1)/fs; % Time vector
-f = fs/1024:fs/1024:fs/2; % Frequency vector for spectrogram
+% INPUT SETUP
+clear all;   % Clear workspace variables
 
-% Compute the spectrogram
-[spec, f, tspec, psd] = spectrogram(song, lwindow, lwindow/2, f, fs); % Spectrogram computation
+NNfunction = @(x) NeuralNetworkFunction(x)  % Trained Neural Network
+TH = 0.5                                    % detection threshold (0.5 by default)
 
-% MFCCs computation
-nbanks = 41; % Number of Mel-frequency filter banks
-twindow = lwindow/fs;%0.0232; % Time window for MFCC calculation
-[dctcoeff, d] = mfccs(song', nbanks, twindow, fs);  % Apply MFCC feature extraction
+% -------------------------------------------------------------------------
+%% TEST AT FILE LEVEL
+%--------------------------------------------------------------------------
+baseDir = 'TestAudios'; % Base directory
+categories = {'presence', 'absence'};
 
-% Neural network classification (use pre-trained neural network)
-% Feeding the MFCC coefficients into the neural network for classification
-[y] = finalNeuralNetworkFunction15khz([dctcoeff(:, 2:13) d(:, 2:13)]'); % Feed MFCCs into the network
-y1 = y(1,:);  % Use the output from the neural network (first row, which is the predicted positive class probabilities)
+% Ground truth:
+SEG_GT = [17, 10, 1, 4, 2, 17, 4, 10, 21, 41, 18, 14, 14, 7, 10, 15, 4, 6, 21, 18, 6, 34, 11, 4, 20, 2, 4, 11, 6, 8, 4, 4, 1, 15, 2, 8, 11, 13, zeros(1, 82)];
+% NN detections:
+SEG_DET = [];
+TP = 0; TN = 0; FP = 0; FN = 0;
+files = [];
 
-% Initialize detection arrays and thresholds
-samples = 16;  % Number of samples to average for detection
-detect = zeros(1, length(y)); % Store detection results by using threshold
 
-% Define thresholds for detection (adjust these for tuning)
-th = 0.4;  % Threshold for detection 
+function [y, y_pred, Ndet] = predict_over_one_file(filename, TH, NNfunction)
+    % Function to calculate possitive predictions for one audio file.
+    %  Returns:
+    %     y:     logical vector of possitive detections
+    %     y_pred: logical output: true if at least one possitive detection
+    %     Ndet:   number of possitive predictions
 
-% Detection loop: Compute detection based on thresholded output
-for k = 1:samples:length(y1)-samples
-    % Apply thresholding to classify detection at each time frame
-    if (sum(y1(k:k+samples-1)) > th*samples)
-        detect(k:k+samples) = 1;  
+    nbanks = 41;    % Number of mel filter banks for MFCC calculation
+    lwindow = 1024; % Window length for signal processing
+    fs = 32000;     % Target sampling frequency in Hz
+
+    % Load audio file (handles MP3 and WAV)
+    [audio, FS] = audioread(filename);
+
+    % Ensure single-channel processing (convert stereo to mono if necessary)
+    if size(audio, 2) > 1
+        audio = mean(audio, 2); % Convert stereo to mono by averaging channels
+    end
+
+    % Resample audio if necessary
+    [P, Q] = rat(fs / FS);  % Calculate resampling ratio to match target sampling frequency (fs)
+    resampledAudio = resample(audio, P, Q); % Resample to target frequency
+
+    % Process if length is sufficient
+    if length(resampledAudio) > lwindow
+        % Calculate MFCC coefficients and their deltas using mfccs.m
+        twindow = 1024/32000; % Temporal window length
+        [mfccCoeffs, mfccDeltas] = mfccs(resampledAudio', nbanks, twindow, fs, 1e10);
+
+        % Feeding the MFCC coefficients into the neural network for classification
+        [y] = NNfunction([mfccCoeffs(:, 2:13) mfccDeltas(:, 2:13)]'); % Feed MFCCs into the network
+        y1 = y(1,:);  % Use the output from the neural network (first row, which is the predicted positive class probabilities)
+        y = (y1 > TH)';
+        y_pred = double(sum(y1 > TH) > 0); % Logical vector of possitive predictions
+        Ndet = sum(y1 > TH);               % Number of possitive predictions
+    else
+        y_pred = -1;
+        Ndet = -1;
+        y1 = [];
     end
 end
 
-% Visualization: Plot detection results, spectrogram, and song waveform
-figure
-nframes = 50; % Number of frames to plot per subplot (time resolution)
-t1 = 0:lwindow/fs:lwindow/fs*length(y); % Time vector for plotting
 
-for i = 1:floor(length(t1)/nframes)
-    % Plot the detection results for different thresholds
-    subplot(3, 1, 1)
-    plot(t1(1+nframes*(i-1):i*nframes), detect(1,1+nframes*(i-1):i*nframes))
-    xlim([t1(1+nframes*(i-1)) t1(i*nframes+1)])
-    ylim([0 1])
-    xlabel('Time (s)')
-    ylabel(['th>', num2str(th)])
-    title(bird)
+% Proccess all testing files
+for catIdx = 1:length(categories) % Process each category (Presence/Absence)
+    category = categories{catIdx};
+    fileLabel = catIdx; % Label index for Presence = 1, Absence = 2
+    
+    filedir = fullfile(baseDir, category);
+    fprintf('- Processing category %s (label %d)\n', category, catIdx-1);
+           
+     % Find all MP3 and WAV files in the directory
+     matfiles = [dir(fullfile(filedir, '*.mp3')); dir(fullfile(filedir, '*.wav')); dir(fullfile(filedir, '*.WAV'))];
+     nfilesb = length(matfiles); % Number of audio files found
+     if nfilesb == 0
+            fprintf('No files found in %s\n', filedir);
+            continue;
+     end
+       
+     fileIndex = 1;
+     processingComplete = false;
 
-    % Plot the original song waveform
-    subplot(3, 1, 2)
-    plot(t(1+nframes*lwindow*(i-1):i*lwindow*nframes), song(1+nframes*lwindow*(i-1):i*lwindow*nframes))
-    xlim([t(1+nframes*lwindow*(i-1)) t(i*lwindow*nframes)])
-    xlabel('Time(s)')
-    ylabel('Amplitude')
+      % Process each audio file in the directory
+      while ~processingComplete
 
-    % Plot the spectrogram
-    subplot(3, 1, 3)
-    surf(tspec(1+nframes*2*(i-1):i*2*nframes), f, log(abs(spec(:,1+nframes*2*(i-1):i*2*nframes))),'EdgeColor','None')
-    xlim([tspec(1+nframes*2*(i-1)) tspec(i*2*nframes)])
-    view(2)
-    xlabel('Time')
-    ylabel('Frequency')
-    ylim([0 15000])
+        % Read the current audio file
+        filename = matfiles(fileIndex).name;
+        %fprintf('Processing file %s\n', filename);
+        files = [files; filename];
+    
+        % Calculate predictions
+        [y, ypred, Ndet] = predict_over_one_file( fullfile(filedir, filename), TH, NNfunction );
+        SEG_DET = [SEG_DET; Ndet];
 
-    % Play a segment of the song
-    sound(song(1+nframes*lwindow*(i-1):i*lwindow*nframes), fs)
+        if ypred == -1 % no enough signal lenght
+            fileIndex = fileIndex + 1;
+            continue;
+        end
 
-    % Pause for visualization update
-    pause
+        % Calculate metrics
+        if catIdx == 1 && ypred
+            TP = TP + 1;
+            fprintf('%s TP. #Detections: %d\n', fullfile(filedir, filename), Ndet);
+        elseif catIdx == 1 && ~ypred
+            FN = FN + 1;
+            fprintf('%s FN. #Detections:  %d\n', fullfile(filedir, filename), Ndet);
+        elseif catIdx == 2 && ~ypred
+            TN = TN + 1;
+            fprintf('%s TN. #Detections:  %d\n', fullfile(filedir, filename), Ndet);
+        else
+            FP = FP + 1;
+            %disp([fullfile(filedir, filename), ' FP ', Ndet]);
+            fprintf('%s FP. #Detections:  %d\n', fullfile(filedir, filename), Ndet);
+        end
+
+        % Check if all files have been processed
+        if fileIndex == length(matfiles)
+            processingComplete = true;
+        else
+            fileIndex = fileIndex + 1; % Move to the next file
+        end
+      end
+        
+      fprintf('   processed %d files\n', nfilesb);
 end
 
+% Display metrics:
+fprintf('TP %d, TN %d, FP %d, FN %d\n', TP, TN, FP ,FN);
+acc = (TP+TN)/(TP+TN+FP+FN)
+precision = TP/(TP+FP)
+recall = TP/(TP+FN)
+f1 = 2*precision*recall/(precision+recall)
+
+R2 = corrcoef(SEG_GT, SEG_DET);
+R2 = R2(1,2)
+
+% Save predictions
+results = [files, strcat(',',num2str(SEG_GT')), strcat(',',num2str(SEG_DET))];
+writematrix(results, 'results.csv')

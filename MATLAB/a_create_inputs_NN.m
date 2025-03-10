@@ -1,5 +1,5 @@
 % MATLAB Script for Extracting MFCC Characteristics of Bird Audio Recordings
-% This script processes MP3 audio recordings (downloaded from Xeno-Canto dataset)
+% This script processes audio recordings (downloaded from Xeno-Canto dataset)
 % to extract Mel-Frequency Cepstral Coefficients (MFCCs) as input features
 % and assigns labels (0/1) to indicate if the audio belongs to a target 
 % bird species: Lesser Kestrel.
@@ -8,72 +8,88 @@
 %% INPUT SETUP
 clear all;   % Clear workspace variables
 nbanks = 41; % Number of mel filter banks for MFCC calculation
-N = 11;      % Number of classes (bird species + background)
 lwindow = 1024; % Window length for signal processing
 fs = 32000;     % Target sampling frequency in Hz
-
-% Resampling configuration
-FS = 44100;         % Original sampling frequency of files
-[P,Q] = rat(fs/FS); % Resampling ratio to achieve target fs
 
 % Initialize data storage
 data = {};
 
-% Define species information for processing
-% Format: {'SpeciesName', 'LabelIndex', 'FilePrefix', 'DirectoryPath'}
-speciesList = {
-    'FalcoNaumanni', 1, 'f*', 'dataset\LesserKestrel';
-    'StreptopeliaDecaocto', 2, 'Tors*', 'dataset\Other\StreptopeliaDecaocto';
-    'ColumbaLivia', 3, 'Pal*', 'dataset\Other\ColumbaLivia';
-    'PasserDomesticus', 4, 'Gor*', 'dataset\Other\PasserDomesticus';
-    'FalcoTinnunculus', 5, 'Cer*', 'dataset\Other\FalcoTinnunculus';
-    'ColoeusMonedula', 6, 'Gra*', 'dataset\Other\Coloeusmonedula';
-    'ApusApus', 7, 'Ven*', 'dataset\Other\ApusApus';
-    'EmberizaCalandra', 8, 'Tri*', 'dataset\Other\EmberizaCalandra';
-    'UpupaEpops', 9, 'Abu*', 'dataset\Other\UpupaEpops';
-    'SturnusUnicolor', 10, 'stu*', 'dataset\Other\SturnusUnicolor';
-    'Background', 11, 'no-target*', 'dataset\Other\Background';
-};
+% Define dataset directories
+baseDir = 'dataset'; % Base directory
+categories = {'Presence', 'Absence'};
 
-% Initialize counters for total duration and inputs for each species
-totalDuration = zeros(1, N); 
-ninputs = zeros(1, N);
+%baseDir = 'datasetv2'; % Base directory
+%categories = {'Presence_10min_proporciones', 'Absence9_10min'};
+subfolders = {'train', 'test', 'val'};
 
+% To save data
+sufix = '_saved';
+
+% Initialize counters
+totalDuration = zeros(1, 2); % Two classes: Presence (1) and Absence (0)
+ninputs = zeros(3, 2);
 current_path = pwd;
-%% PROCESS EACH SPECIES
-for i = 1:size(speciesList, 1)
-    % Get species information
-    speciesName = speciesList{i, 1};
-    labelIndex = speciesList{i, 2};
-    filePrefix = speciesList{i, 3};
-    filedir = speciesList{i, 4};
+
+N = length(categories); % Number of classes (Presence and Absence)
+
+%% PROCESS EACH CATEGORY (Presence/Absence)
+for catIdx = 1:length(categories)
+    category = categories{catIdx};
+    fileLabel = catIdx; % Label index for Presence = 1, Absence = 2
     
-    % Find all relevant files in the directory with the specified prefix
-    matfiles = dir(fullfile(filedir, filePrefix));
-    nfilesb = length(matfiles); % Number of audio files found
-    
-    % Set label vector for the species: one-hot enconding
+	% Create one-hot encoded label vector
     label = zeros(1, N);
-    label(labelIndex) = 1;
-    
-    % Call external script for data extraction
-    % Assumes 'data_extract' processes audio files and returns 'bird', 
-    % 'trecord' (total duration), and 'ninputsloc' (number of inputs)
-    cd(current_path);
-    data_extract;
-    
-    % Append extracted data for this species
-    data = [data; bird]; 
-    
-    % Store total duration and input count for this species
-    totalDuration(labelIndex) = trecord;
-    ninputs(labelIndex) = ninputsloc;
+    label(fileLabel) = 1;
+	
+    for subIdx = 1:length(subfolders)
+        subfolder = subfolders{subIdx};  % 'train', 'test', or 'val'
+        filedir = fullfile(baseDir, category, subfolder);
+        fprintf('- Processing category %s (label %d), subset %s\n', category, catIdx-1, subfolder);
+        
+        if ~isfolder(filedir)
+            fprintf('Skipping missing directory: %s\n', filedir);
+            continue;
+        end
+        
+        % Find all MP3 and WAV files in the directory
+        matfiles = [dir(fullfile(filedir, '*.mp3')); dir(fullfile(filedir, '*.wav'))];
+        nfilesb = length(matfiles); % Number of audio files found
+
+        if nfilesb == 0
+            fprintf('No files found in %s\n', filedir);
+            continue;
+        end
+   
+        % Call external script for data extraction
+        cd(current_path);
+        data_extract;
+
+        % Append extracted data
+        data = [data; bird]; 
+
+        % Store total duration and input count
+        totalDuration(catIdx) = totalDuration(catIdx) + trecord;
+        ninputs(subIdx, catIdx) = ninputsloc;
+        fprintf('   processed %d files with %d inputs\n', nfilesb, ninputsloc);
+    end
 end
 
-% Summarize total number of inputs across all species
+% Summarize total number of inputs
 totalInputs = sum(ninputs);
 
 %% SAVE EXTRACTED DATA
-save('extracted_data.mat', 'data', 'fs', 'nbanks', 'totalInputs', ...
-    'totalDuration', 'ninputs');
+save(strcat('extracted_data',sufix,'.mat'), 'fs', 'nbanks', 'totalInputs', 'totalDuration', 'ninputs');
+
+fprintf('Data extraction complete. Total Inputs: %d\n', totalInputs);
+ninputs
+
+% Extract separate datasets based on the stored dataset type
+train_data = data(strcmp({data{:,7}}, 'train'), :);
+val_data = data(strcmp({data{:,7}}, 'val'), :);
+test_data = data(strcmp({data{:,7}}, 'test'), :);
+
+% Save them separately for easier use later
+save(strcat('train_data',sufix,'.mat'), 'train_data');
+save(strcat('val_data',sufix,'.mat'), 'val_data');
+save(strcat('test_data',sufix,'.mat'), 'test_data');
 

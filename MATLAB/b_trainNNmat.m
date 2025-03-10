@@ -12,52 +12,49 @@
 % 5. Save the trained network for deployment.
 
 % Load data for training
-dataFile = 'extracted_data.mat'
+dataFile = 'extracted_data.mat';
 load(dataFile);
 
-% Initialize inputs and outputs
-inputs = zeros(totalInputs, 2 * nbanks);
-outputs = zeros(totalInputs, 1);
+% Display basic information
+disp(['Total Inputs: ', num2str(totalInputs)]);
+disp(['Total Duration (s): ', num2str(sum(totalDuration))]);
+disp(['Number of Inputs per Class: ', num2str(sum(ninputs))]);
 
-% Populate inputs and outputs from data
-index = 0;
-for sampleIdx = 1:size(data, 1)
-    for frameIdx = 1:size(data{sampleIdx, 4}, 1) % for each segment
-        index = index + 1;
-        inputs(index, :) = data{sampleIdx, 4}(frameIdx, :); % MFCC features                   
-        outputs(index, 1) = data{sampleIdx, 5}(1);          % Labels (1 for Lesser Kestrel, 0 otherwise)
+
+% Load pre-split datasets
+load('train_data.mat'); % Train set
+load('val_data.mat');   % Validation set
+load('test_data.mat');  % Test set
+
+% Extract MFCC features and labels for each dataset
+function [X, Y] = extract_features_labels(data, totalInputs, nbanks)
+    X = zeros(totalInputs, 2 * nbanks);
+    Y = zeros(totalInputs, 1);
+    
+    % Populate inputs X and outputs Y from data
+    index = 0;
+    for sampleIdx = 1:size(data, 1)
+        for frameIdx = 1:size(data{sampleIdx, 4}, 1) % For each segment
+            index = index + 1;
+            X(index, :) = data{sampleIdx, 4}(frameIdx, :); % MFCC features
+            Y(index, 1) = data{sampleIdx, 5}(1);          % Labels (1 for Lesser Kestrel, 0 otherwise)
+        end
     end
 end
 
-
-% Divide data into training, validation, and test subsets
-% Using a random proportional division of 65% training, 15% validation, and 20% testing
-[trainInd,valInd,testInd] = divideint(size(inputs,1),0.65,0.15,0.2);
-
-% Randomly reorder indices within each subset for unbiased training
-orderTrainInd = randperm(size(trainInd,2)); 
-inputstrain = inputs(trainInd(orderTrainInd),:);
-outputstrain = outputs(trainInd(orderTrainInd),:); 
-
-orderTrainVal = randperm(size(valInd,2));
-inputsval = inputs(valInd(orderTrainVal),:);
-outputsval = outputs(valInd(orderTrainVal),:);
-
-orderTrainTest = randperm(size(testInd,2));
-inputstest = inputs(testInd(orderTrainTest),:);
-outputstest = outputs(testInd(orderTrainTest),:);
-
-% Combine all subsets into unified input/output arrays for simplicity
-inputs = [inputstrain; inputsval; inputstest];
-outputs = [outputstrain; outputsval; outputstest];
-
-init(net)
+% Extract features and labels
+[inputsTrain, outputsTrain] = extract_features_labels(train_data, sum(ninputs(1,:)), nbanks);
+[inputsVal, outputsVal] = extract_features_labels(val_data, sum(ninputs(2,:)), nbanks);
+[inputsTest, outputsTest] = extract_features_labels(test_data, sum(ninputs(3,:)), nbanks);
 
 % Prepare input-output for the neural network
 % Use selected features for training, excluding some zeroed MFCCs
-x = inputs(:,[2:13 43:42+12])'; % Input features (without zeroed MFCC)
-t = outputs(:,1)';              % Target labels
-t(2,:) = ~t(1,:);				% Create binary target vectors (1-hot encoding)
+inputs = [inputsTrain; inputsVal; inputsTest]; % Combine all inputs
+outputs = [outputsTrain; outputsVal; outputsTest]; % Combine all outputs
+x = inputs(:,[2:13 43:42+12])'; % Input features (revlevant features without zeroed MFCC)
+t = outputs';                   % Target labels. Transpose for NN format
+t(2,:) = ~t(1,:);               % Create binary target vectors (1-hot encoding)
+
 
 % Choose a Training Function
 trainFcn = 'trainscg';  % Scaled conjugate gradient backpropagation.
@@ -75,9 +72,9 @@ net.output.processFcns = {};
 
 % Setup Division of Data for Training, Validation, Testing
 net.divideFcn = 'divideind'; % Partition indices into three sets using specified indices
-net.divideParam.trainInd = 1:length(trainInd);
-net.divideParam.valInd   = 1+length(trainInd):length(trainInd)+length(valInd);
-net.divideParam.testInd  = 1+length(trainInd)+length(valInd):length(trainInd)+length(valInd)+length(testInd);
+net.divideParam.trainInd = 1:size(inputsTrain,1);
+net.divideParam.valInd   = 1+size(inputsTrain,1):size(inputsTrain,1)+size(inputsVal,1);
+net.divideParam.testInd  = 1+size(inputsTrain,1)+size(inputsVal,1):size(inputsTrain,1)+size(inputsVal,1)+size(inputsTest,1);
 
 
 % Choose a Performance Function
