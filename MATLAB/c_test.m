@@ -27,7 +27,7 @@ SEG_GT = [17, 10, 1, 4, 2, 17, 4, 10, 21, 41, 18, 14, 14, 7, 10, 15, 4, 6, 21, 1
 SEG_DET = [];
 TP = 0; TN = 0; FP = 0; FN = 0;
 files = [];
-
+all_y = [];
 
 function [y, y_pred, Ndet] = predict_over_one_file(filename, TH, NNfunction)
     % Function to calculate possitive predictions for one audio file.
@@ -102,6 +102,7 @@ for catIdx = 1:length(categories) % Process each category (Presence/Absence)
         % Calculate predictions
         [y, ypred, Ndet] = predict_over_one_file( fullfile(filedir, filename), TH, NNfunction );
         SEG_DET = [SEG_DET; Ndet];
+        all_y = [all_y, y];
 
         if ypred == -1 % no enough signal lenght
             fileIndex = fileIndex + 1;
@@ -148,3 +149,5 @@ R2 = R2(1,2)
 % Save predictions
 results = [files, strcat(',',num2str(SEG_GT')), strcat(',',num2str(SEG_DET))];
 writematrix(results, 'results.csv')
+
+save('predictions_audio.mat', 'all_y', 'files');

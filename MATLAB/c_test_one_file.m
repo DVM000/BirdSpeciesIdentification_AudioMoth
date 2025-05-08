@@ -3,11 +3,11 @@
 
 % Load the bird song audio file
 [song, FS] = audioread('XC895702.wav'); bird = '\it Falco Naumanni'; % Label the bird species 
-[song, FS] = audioread('XC975924.wav'); bird = '\it Falco tinnunculus';
 %[song, FS] = audioread('XC840017.wav'); bird = '\it Columba livia';
 %[song, FS] = audioread('XC861083.wav'); bird = '\it Sturnus unicolor';
 %[song, FS] = audioread('XC977002.mp3'); bird = '\it Streptopelia decaocto';
-%[song, FS] = audioread('20210505_171900.WAV');  bird = '\it Falco Naumanni';
+%[song, FS] = audioread('XC975924.wav'); bird = '\it Falco tinnunculus';
+[song, FS] = audioread('20210505_171900.WAV');  bird = '\it Falco Naumanni';
 
 song = song(:,1); % Use the first channel in case of stereo audio (mono audio)
 
@@ -62,7 +62,7 @@ end
 % Visualization: Plot detection results, spectrogram, and song waveform
 % Split the visualizacion into partial plots, each one of nframes*twindow seconds
 figure
-nframes = 60; % Number of frames to plot per subplot (time resolution)
+nframes = 120; % Number of frames to plot per subplot (time resolution)
 t1 = 0:lwindow/fs:lwindow/fs*length(y); % Time vector for plotting
 
 for i = 1:floor(length(t1)/nframes)
@@ -71,8 +71,8 @@ for i = 1:floor(length(t1)/nframes)
     surf(tspec(1+nframes*2*(i-1):i*2*nframes), f, log(abs(spec(:,1+nframes*2*(i-1):i*2*nframes))),'EdgeColor','None')
     xlim([tspec(1+nframes*2*(i-1)) tspec(i*2*nframes)])
     view(2)
-    xlabel('Time')
-    ylabel('Frequency')
+    xlabel('Time (s)')
+    ylabel('Frequency (Hz)')
     ylim([0 15000])
 
     % Plot the detection results for different thresholds
@@ -100,6 +100,7 @@ for i = 1:floor(length(t1)/nframes)
     sound(song(1+nframes*lwindow*(i-1):i*lwindow*nframes), fs)
 
     % Pause for visualization update
+    saveas(gcf,'Test_1.png')
     pause
 end
 
