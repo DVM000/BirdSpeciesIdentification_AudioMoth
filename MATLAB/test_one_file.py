@@ -196,11 +196,12 @@ def NeuralNetworkFunction(X):
 # --------------------------------------------------------------------------------
 
 # Load audio file
-filename = 'XC895702.wav'  
+filename = 'audios/XC895702.wav'  
 
 song, FS = librosa.load(filename, sr=None, mono=False)
-try:     song = song[1,:] # one-channel
-except:  pass
+if song.ndim == 2:
+    song = np.mean(song, axis=0) #song[1,:] # one-channel 
+
 
 # NN parameters
 th = 0.5  # detection threshold
