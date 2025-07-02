@@ -2,12 +2,12 @@
 % and then thresholds the output to detect bird calls. Results are visualized for manual evaluation of detection.
 
 % Load the bird song audio file
-[song, FS] = audioread('XC895702.wav'); bird = '\it Falco Naumanni'; % Label the bird species 
+[song, FS] = audioread('audios/XC895702.wav'); bird = '\it Falco Naumanni'; % Label the bird species 
 %[song, FS] = audioread('XC840017.wav'); bird = '\it Columba livia';
 %[song, FS] = audioread('XC861083.wav'); bird = '\it Sturnus unicolor';
 %[song, FS] = audioread('XC977002.mp3'); bird = '\it Streptopelia decaocto';
 %[song, FS] = audioread('XC975924.wav'); bird = '\it Falco tinnunculus';
-[song, FS] = audioread('20210505_171900.WAV');  bird = '\it Falco Naumanni';
+%[song, FS] = audioread('20210505_171900.WAV');  bird = '\it Falco Naumanni';
 
 song = song(:,1); % Use the first channel in case of stereo audio (mono audio)
 
