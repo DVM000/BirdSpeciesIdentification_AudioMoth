@@ -1,6 +1,6 @@
 # On-device Falco naumanni presence detection
 
-This repository contains MATLAB code and AudioMoth firmware modifications for detecting the presence of the _Falco naumanni_ species using audio recordings collected with AudioMoth device. 
+This repository contains MATLAB code and AudioMoth firmware modifications for detecting the presence of the _Falco naumanni_ species using audio recordings collected with AudioMoth device. </br>
 The project integrates data curation, neural network training, and embedded implementation of the trained model on an AudioMoth device.
 
 ---
@@ -8,6 +8,9 @@ The project integrates data curation, neural network training, and embedded impl
 ## Repository Structure
 
 ### 1. AudioMoth folder
+
+<img src="doc/audiomoth.jpg" alt="audiomoth image" width="250"/>
+
 This folder contains the modified AudioMoth firmware based on the [Open Acoustic Devices AudioMoth Basic Firmware v1.11.0](https://github.com/OpenAcousticDevices/AudioMoth-Firmware-Basic/tree/1.11.0) to be integrated in the [Open Acoustic Devices AudioMoth Project](https://github.com/OpenAcousticDevices/AudioMoth-Project).
 
 The modifications of source code include:
@@ -55,6 +58,8 @@ This folder contains the code employed for preparing the dataset, training the n
 - **`c_test_one_file.m`**:  
   Exemplifies the classification performance of the trained network with example data.
   
+  <img src="doc/Test.png" alt="example test image" width="400"/>
+  
 - **`c_test.m`**:  
   Evaluates the classification performance of the trained network over test dataset.
 
@@ -64,6 +69,10 @@ This folder contains the code employed for preparing the dataset, training the n
 - **Auxiliary Scripts**:  
   Additional `.m` files provide support functions for data processing, feature extraction, and other utilities.
 
+- **Python Scripts**:
+   - `test_one_file.py`: exemplifies the classification performance of the trained network with example data. </br>
+   - `test_files.py`: executes NN inference over audio files in a specified folder, saving results into a `.txt` file.
+   
 ### MATLAB Workflow employed
 1. **Generate Feature Vectors**  
    Run `a_create_inputs_NN.m` to process the dataset and create input feature vectors for training.
