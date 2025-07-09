@@ -346,7 +346,6 @@ static void deltas(float32_t **buffers);
 static float32_t neuralNetwork(float32_t *bufferMFCC);
 
 arm_rfft_fast_instance_f32 realFFTinstance;
-// <---
 
 /* USB configuration data structure */
 
@@ -3148,6 +3147,7 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
     AudioMoth_startMicrophoneSamples(configSettings->sampleRate);
     
     /* Main recording loop */
+    uint32_t accumulatedMilliseconds = 0; // Introduced: for tracking milliseconds
 
     while (samplesWritten < numberOfSamples + numberOfSamplesInHeader && !microphoneChanged && !switchPositionChanged && !magneticSwitch && !supplyVoltageLow) {
 
@@ -3264,34 +3264,36 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
                 }
 
                 // --> Introduced code: Log detections if probability exceeds threshold
-		if (NNoutput > (float32_t)(THRESHOLD_DETECTION)){
-					    FIL callfile; //File to keep detections
-					    f_open(&callfile,"calls.txt", FA_OPEN_APPEND | FA_WRITE);
-					    uint32_t currentTime;
-					    AudioMoth_getTime(&currentTime, NULL);
-					    time_t rawtime = currentTime + configSettings->timezoneHours * 3600 + configSettings->timezoneMinutes * 60;
-					    struct tm *time = gmtime(&rawtime);
-					    char str[21];
-					    sprintf(str, "%04d/%02d/%02d %02d:%02d:%02d \n", 1900 + time->tm_year, time->tm_mon + 1, time->tm_mday, time->tm_hour, time->tm_min, time->tm_sec);
-					    f_puts(str,&callfile);
-					    f_close(&callfile);
-
-					    AudioMoth_setGreenLED(true);
-					    BufferGreen = readBuffer;
-
-				    } 
+		if (NNoutput > (float32_t)(THRESHOLD_DETECTION)) {
+		    time_t rawtime = timeOfNextRecording + configSettings->timezoneHours * SECONDS_IN_HOUR + configSettings->timezoneMinutes * SECONDS_IN_MINUTE 
+		                      + (accumulatedMilliseconds / 1000);  // filename + accumulated milliseconds
+		    struct tm *time = gmtime(&rawtime);
+		    char str[28];
+		    sprintf(str, "%04d/%02d/%02d %02d:%02d:%02d.%02u\n", 
+		                 1900 + time->tm_year, time->tm_mon + 1, time->tm_mday, time->tm_hour, time->tm_min, time->tm_sec, accumulatedMilliseconds % 1000);//, readBuffer);
+        
+		    FIL callfile; //File to keep detections
+		    f_open(&callfile,"calls.txt", FA_OPEN_APPEND | FA_WRITE);
+		    f_puts(str,&callfile);
+		    f_close(&callfile);
+                    
+		    AudioMoth_setGreenLED(true);
+		    BufferGreen = readBuffer;
+		} 
 		//if (((readBuffer+1) % NUMBER_OF_BUFFERS_IN_SUPERBUFFER == 0) && (NNoutput < (float32_t)(THRESHOLD_DETECTION))) { // for each superbuffer{
 		if ((readBuffer - BufferGreen) > NUMBER_OF_BUFFERS_IN_SUPERBUFFER) {
 					    AudioMoth_setGreenLED(false);
 		  }
+		 
+                // update milliseconds:
+	        accumulatedMilliseconds += (1e3f* NUMBER_OF_SAMPLES_IN_BUFFER) / (configSettings->sampleRate / configSettings->sampleRateDivider);  // 1024 / 32k = 32ms
 	       // <--
 
                 /* Clear LED */
 
                 AudioMoth_setRedLED(false);
 
-            }
-            
+            }     
 
             /* Increment buffer counters */
 
