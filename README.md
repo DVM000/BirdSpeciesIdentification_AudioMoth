@@ -32,9 +32,10 @@ The built binary file `audiomoth_NN.bin`, ready to be flashed to the device, is 
 1. Employ the [AudioMoth Flash App](https://www.openacousticdevices.info/applications) to flash the provided `audiomoth_NN.bin` into the AudioMoth device.
 2. Once flashed, use the [AudioMoth Configuration App](https://www.openacousticdevices.info/applications) to configure the *Sample Rate* to 32 kHz, and also the desired *Recording period*.
   **Note**: to simplify the functionality, *Filtering* options are not allowed in this firmware.
-3. Turn on the device into CUSTOM or DEFAULT mode. Deploy the device for field data collection and real-time species detection.
-4. **(Optional)**: You can adjust the neural network detection threshold by placing the text file `NN_CONFIG.txt` - provided in this repository - on the SD card. Edit the line like this `NN_THRESHOLD=0.75` (for a threshold of 0.75) to customize detection sensitivity without modifying the firmware. Otherwise, if this file is not included in the SD card, default 0.5 detection threshold is employed.
-5. The threshold value that is finally used by the firmware is logged to the `CONFIG.TXT` file for reference.
+3. **(Optional)**: You can adjust the neural network detection threshold by placing the text file `NN_CONFIG.txt` - provided in this repository - on the SD card. Edit the line like this `NN_THRESHOLD=0.75` (for a threshold of 0.75) to customize detection sensitivity without modifying the firmware. Otherwise, if this file is not included in the SD card, default 0.5 detection threshold is employed.
+4. Turn on the device into CUSTOM or DEFAULT mode. Deploy the device for field data collection and real-time species detection.
+
+The threshold value that is finally used by the firmware is logged to the `CONFIG.TXT` file for reference.
 
    
 ### b) Code compilation and AudioMoth Integration
@@ -44,7 +45,10 @@ Although option (a) is recommended,  you can build the code by yourself:
 3. Employ the [AudioMoth Flash App](https://www.openacousticdevices.info/applications) to flash it onto the AudioMoth device.
 4. Once flashed, use the [AudioMoth Configuration App](https://www.openacousticdevices.info/applications) to configure the *Sample Rate* to 32 kHz, and also the desired *Recording period*.
   **Note**: to simplify the functionality, *Filtering* options are not allowed in this firmware.
-5. Turn on the device into CUSTOM or DEFAULT mode. Deploy the device for field data collection and real-time species detection.
+5. **(Optional)**: You can adjust the neural network detection threshold by placing the text file `NN_CONFIG.txt` - provided in this repository - on the SD card. Edit the line like this `NN_THRESHOLD=0.75` (for a threshold of 0.75) to customize detection sensitivity without modifying the firmware. Otherwise, if this file is not included in the SD card, default 0.5 detection threshold is employed.
+6. Turn on the device into CUSTOM or DEFAULT mode. Deploy the device for field data collection and real-time species detection.
+
+The threshold value that is finally used by the firmware is logged to the `CONFIG.TXT` file for reference.
 
 ---
 
