@@ -34,6 +34,7 @@ The built binary file `audiomoth_NN.bin`, ready to be flashed to the device, is 
   **Note**: to simplify the functionality, *Filtering* options are not allowed in this firmware.
 3. Turn on the device into CUSTOM or DEFAULT mode. Deploy the device for field data collection and real-time species detection.
 4. **(Optional)**: You can adjust the neural network detection threshold by placing the text file `NN_CONFIG.txt` - provided in this repository - on the SD card. Edit the line like this `NN_THRESHOLD=0.75` (for a threshold of 0.75) to customize detection sensitivity without modifying the firmware. Otherwise, if this file is not included in the SD card, default 0.5 detection threshold is employed.
+5. The threshold value that is finally used by the firmware is logged to the `CONFIG.TXT` file for reference.
 
    
 ### b) Code compilation and AudioMoth Integration
