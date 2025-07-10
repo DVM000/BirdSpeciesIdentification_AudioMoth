@@ -86,8 +86,7 @@
 #define NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC	12
 #define NBANKS								41
 #define INIT_COUNTDOWN						1230
-#define THRESHOLD_DETECTION					0.5f
-//#define DETECTION_VALUE						THRESHOLD_DETECTION * NUMBER_OF_BUFFERS_IN_SUPERBUFFER
+//#define THRESHOLD_DETECTION					0.5f
 
 #define MAX_INT_VALUE						32767
 // <---
@@ -340,12 +339,18 @@ static float32_t MK3[NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC];
 static float32_t MK1[NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC];
 static float32_t MK0[NUMBER_OF_SAMPLES_IN_BUFFERS_MFCC];
 
+void writeLog(char * str);
+float parseFloat(const char *str);
+void LoadNNConfig(void);
 static void MFCC(int16_t *bufferIN, float32_t *bufferOUT, uint32_t readBuffer);
 static void DCTII(float32_t *in, float32_t *out);
 static void deltas(float32_t **buffers);
 static float32_t neuralNetwork(float32_t *bufferMFCC);
 
 arm_rfft_fast_instance_f32 realFFTinstance;
+
+float32_t NN_THRESHOLD = 0.5f; // default value
+// <---
 
 /* USB configuration data structure */
 
@@ -890,7 +895,7 @@ static uint32_t writeGuanoData(char *buffer, configSettings_t *configSettings, u
 /* Function to write configuration to file */
 
 static bool writeConfigurationToFile(configSettings_t *configSettings, uint32_t currentTime, bool gpsLocationReceived, int32_t *gpsLatitude, int32_t *gpsLongitude, bool acousticLocationReceived, int32_t *acousticLatitude, int32_t *acousticLongitude, uint8_t *firmwareDescription, uint8_t *firmwareVersion, uint8_t *serialNumber, uint8_t *deploymentID, uint8_t *defaultDeploymentID) {
-
+    
     static char configBuffer[CONFIG_BUFFER_LENGTH];
 
     static char timezoneBuffer[CONFIG_TIMEZONE_LENGTH];
@@ -941,8 +946,13 @@ static bool writeConfigurationToFile(configSettings_t *configSettings, uint32_t 
 
     RETURN_BOOL_ON_ERROR(AudioMoth_writeToFile(configBuffer, length));
 
-    length = sprintf(configBuffer, "\r\n\r\nSample rate (Hz)                : %lu\r\n", configSettings->sampleRate / configSettings->sampleRateDivider);
-
+    // ---> Introduced
+    LoadNNConfig(); 
+    int thScaled = (int)(NN_THRESHOLD * 100 + 0.5f); // change range, e.g. 0.75 -> 75
+    length = sprintf(configBuffer, "\r\n\r\nNN threshold                    : 0.%02d", thScaled); 
+    // <---
+    length += sprintf(configBuffer + length, "\r\n\r\nSample rate (Hz)                : %lu\r\n", configSettings->sampleRate / configSettings->sampleRateDivider); // modified +=, + length
+    
     static char *gainSettings[5] = {"Low", "Low-Medium", "Medium", "Medium-High", "High"};
 
     length += sprintf(configBuffer + length, "Gain                            : %s\r\n\r\n", gainSettings[configSettings->gain]);
@@ -1318,6 +1328,7 @@ static uint32_t *timeOfNextSunriseSunsetCalculation = (uint32_t*)(AM_BACKUP_DOMA
 
 static configSettings_t *configSettings = (configSettings_t*)(AM_BACKUP_DOMAIN_START_ADDRESS + 84);
 
+
 /* Functions to query, set and clear backup domain flags */
 
 typedef enum {
@@ -1426,7 +1437,7 @@ static int16_t secondaryBuffer[MAXIMUM_SAMPLES_IN_DMA_TRANSFER];
 
 static uint8_t firmwareVersion[AM_FIRMWARE_VERSION_LENGTH] = {1, 11, 0};
 
-static uint8_t firmwareDescription[AM_FIRMWARE_DESCRIPTION_LENGTH] = "AudioMoth-Firmware-Basic";
+static uint8_t firmwareDescription[AM_FIRMWARE_DESCRIPTION_LENGTH] = "AudioMoth-Firmware-Basic"; // Not modified to allow using Configuration App
 
 /* Function prototypes */
 
@@ -1615,7 +1626,7 @@ int main(void) {
     /* Initialise device */
 
     AudioMoth_initialise();
-
+      
     AM_switchPosition_t switchPosition = AudioMoth_getSwitchPosition();
 
     if (AudioMoth_isInitialPowerUp()) {
@@ -1687,7 +1698,7 @@ int main(void) {
             copyToBackupDomain((uint32_t*)configSettings, (uint8_t*)&defaultConfigSettings, sizeof(configSettings_t));
 
         }
-
+        
     }
 
     /* Handle the case that the switch is in USB position  */
@@ -1837,7 +1848,7 @@ int main(void) {
         }
 
         /* Calculate time of next recording if ready to make a recording */
-
+    
         if (getBackupFlag(BACKUP_READY_TO_MAKE_RECORDING)) {
 
             /* Enable energy saver mode */
@@ -2081,7 +2092,7 @@ int main(void) {
         }
 
         /* Make the recording */
-
+      
         uint32_t fileOpenTime;
 
         uint32_t fileOpenMilliseconds;
@@ -2121,7 +2132,7 @@ int main(void) {
             if (!fileSystemEnabled) fileSystemEnabled = AudioMoth_enableFileSystem(configSettings->sampleRateDivider == 1 ? AM_SD_CARD_HIGH_SPEED : AM_SD_CARD_NORMAL_SPEED);
 
             if (fileSystemEnabled)  {
-
+                LoadNNConfig(); // Introduced
                 recordingState = makeRecording(*timeOfNextRecording, *durationOfNextRecording, enableLED, extendedBatteryState, temperature, &fileOpenTime, &fileOpenMilliseconds);
 
             } else {
@@ -3264,12 +3275,12 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
                 }
 
                 // --> Introduced code: Log detections if probability exceeds threshold
-		if (NNoutput > (float32_t)(THRESHOLD_DETECTION)) {
+		if (NNoutput > (float32_t)(NN_THRESHOLD)) {
 		    time_t rawtime = timeOfNextRecording + configSettings->timezoneHours * SECONDS_IN_HOUR + configSettings->timezoneMinutes * SECONDS_IN_MINUTE 
 		                      + (accumulatedMilliseconds / 1000);  // filename + accumulated milliseconds
 		    struct tm *time = gmtime(&rawtime);
-		    char str[28];
-		    sprintf(str, "%04d/%02d/%02d %02d:%02d:%02d.%02u\n", 
+		    char str[24];
+		    sprintf(str, "%04d/%02d/%02d %02d:%02d:%02d.%02lu\n", 
 		                 1900 + time->tm_year, time->tm_mon + 1, time->tm_mday, time->tm_hour, time->tm_min, time->tm_sec, accumulatedMilliseconds % 1000);//, readBuffer);
         
 		    FIL callfile; //File to keep detections
@@ -4084,8 +4095,130 @@ static void flashLedToIndicateBatteryLife(void) {
 
 }
 
-
+ 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/* FUNCTIONS FOR NN CONFIGURATION READING AND LOGGING */ 
+
+/* Function: writeLog
+ * Purpose: append a text message to "log.txt" on the SD card.
+ * -------------------------------------------------------------------------*/
+void writeLog(char *str)
+{
+    FIL outfile;
+    // Create the file if it doesn't exist, or append if it does 
+    FRESULT res = f_open(&outfile, "log.txt",
+                         FA_OPEN_APPEND | FA_OPEN_ALWAYS | FA_WRITE);
+
+    if (res == FR_OK) {
+        f_puts(str, &outfile);   
+        f_sync(&outfile);        
+        f_close(&outfile);       
+    }
+    // If opening fails, toggle an LED? 
+}
+
+/* 
+ * Function:  parseFloat
+ * Purpose:   Convert a decimal string (e.g. "3.1415") into a float WITHOUT
+ *            using atof/sscanf, which may be unsupported on embedded systems.
+ *
+ * Steps:
+ *   1. Iterate through the string character by character.
+ *   2. Before the decimal point ('.'), build the integer part.
+ *   3. After the decimal point, build the fractional part and count digits.
+ *   4. Scale the fractional part by dividing it by 10^n.
+ *
+ * Parameters:
+ *   - str: Pointer to a null-terminated string containing the number.
+ *
+ * Returns:
+ *   - The parsed float value.
+ */
+float parseFloat(const char *str)
+{
+    int intPart = 0;           // Integer part before the dot
+    int fracPart = 0;          // Fractional digits as integer
+    int fracDigits = 0;        // Number of fractional digits
+    bool afterDot = false;     // Flag to track if '.' has been encountered
+
+    // Parse integer and fractional parts
+    while (*str)
+    {
+        if (*str == '.')
+            afterDot = true;
+        else if (*str >= '0' && *str <= '9')
+        {
+            if (!afterDot)
+                intPart = intPart * 10 + (*str - '0');
+            else
+            {
+                fracPart = fracPart * 10 + (*str - '0');
+                fracDigits++;
+            }
+        }
+        else
+            break; // Stop parsing on invalid character
+
+        str++;
+    }
+
+    // Convert fractional part to float
+    float frac = fracPart;
+    while (fracDigits--) frac /= 10.0f;
+
+    // Return full float value
+    return intPart + frac;
+}
+
+/* 
+ * Function:  LoadNNConfig
+ * Purpose:   Read NN_THRESHOLD from "NN_CONFIG.txt" on the SD card.
+ *            If the file is missing or the value is invalid, fallback
+ *            to a default value already stored in the global variable.
+ *
+ * Steps:
+ *   1. Open "NN_CONFIG.txt"; log error if the file cannot be opened.
+ *   2. Read the file line by line, looking for "NN_THRESHOLD".
+ *   3. If found, skip to the value and convert it using parseFloat().
+ *   4. Log the value used (parsed or default) to "used_th.txt".
+ *
+ * Parameters: None (uses global NN_THRESHOLD).
+ */
+void LoadNNConfig(void)
+{
+    FRESULT result;
+    FIL file;
+    char line[24];
+    bool valueFound = false;
+
+    // Open configuration file 
+    result = f_open(&file, "NN_CONFIG.txt", FA_READ);
+    if (result != FR_OK) {
+        writeLog("Warning: could not open NN_CONFIG.txt\n");
+        return;                             // default value 
+    }
+
+    // Scan lines until NN_THRESHOLD is found 
+    while (f_gets(line, sizeof(line), &file))
+    {
+        char *p = line;
+        while (isspace(*p)) p++;            // Skip leading spaces  
+
+        if (strncmp(p, "NN_THRESHOLD", 12) == 0) // Check if line starts with "NN_THRESHOLD"
+        {
+            p += 12;                       // Move past "NN_THRESHOLD"
+            while (isspace(*p) || *p == '=') p++; // Skip '=' and spaces
+
+            // Parse and store value 
+            NN_THRESHOLD = parseFloat(p);
+            valueFound   = true;
+            break;
+        }
+    }
+    f_close(&file);
+}
+
 
 
 /* FUNCTIONS NEEDED IN makeRecording THAT PERFORM MFCC EXTRACTION AND NEURAL NETWORK PROCESSING */
@@ -4249,11 +4382,25 @@ static void deltas(float32_t **Dbuffers){
 static float32_t neuralNetwork(float32_t *bufferMFCC){
 
     // Define weights and biases for the neural network (extracted from MATLAB)	
+	/*static const float32_t b1[2] = {-1.6506595038998270741, 1.0714025936080897594};
+	static const float32_t b2[2] = {0.71983910097112435711, 0.42310377090373713083};
+	
+	static const float32_t A1[48] = {-0.14701604449555649712, 0.012510029384784456669, -0.10765188152252687381, 0.071180338776944462875, 0.061337039759318652543, 0.07557964594909946654, -0.052529524209502437282, -0.18343187601660726482, -0.028753465003183625859, 0.14929364750239063064, -0.22476698332039823924, 0.22934918030278503287, -0.05035400237997162548, -0.15055370722294802999, -0.3923630242629779219, -0.13481919076067130914, -0.63449351419339827807, 0.56403213635115156954, 0.21292134952589161778, 0.057119735283437930717, -0.22679689855485193895, 0.045036925887866785523, -0.32470570602237780466, -0.018139349505913043153, 0.68511045408493331799, 0.49584749848072662282, 0.67755136527226134113, 0.069789348142964946486, -0.48259518349628083289, 0.31833828044030243465, -0.36685163332242770595, 0.32092691603317674565, -0.031015556069871316747, -0.096091285828796710322, -0.19435447514644649258, -0.15616056365643254944, -0.15479064083304672206, -0.14544622046057389952, -0.029775084319359788887, -0.25126427067816187177, 0.24481594574285836519, 0.47007313654123988877, 0.10662993499324295577, 0.57975668297760285519, 0.30475582538514162101, 0.11974450165227325249, 0.57213684340161352626, 0.51677005424638533526};
+	
+	static const float32_t A2[4] = {-0.14048335432837033565, -1.3336896431931430929, -0.35913970340071038612, 0.34787595174652785612};*/
+	
+	//NN24
 	static const float32_t b1[2] = {1.8916010551494097935, 2.0087474377775778045};
 	static const float32_t b2[2] = {-0.089268169590198245822, 0.52228923760607492977};
 	
 	static const float32_t A1[48] = {0.1998886754907664709, 0.57158025640225418318, 0.073053558551228664486, 0.30815336956943989444, -0.36003003489407331417, 0.35955390517506552461, -0.55180303576284406297, 0.36854512746086781627, -0.11990989497331375202, -0.12415192057333071518, -0.11036941186308167617, 0.17488461021140797036, -0.013529466284958970024 ,-0.14750359472676494166, 0.055395201464141327619, 0.37214938872552660865, -0.24550221656609863552, 0.26630143218921387138, -0.47940732926561213656, -0.50824973434697218178, 0.38211640719584838433, 0.62598088027513776321, 0.23283702476734549625, 0.67685222502032615921, -0.58969760140591542807, 0.13612969647931399964, 0.28130343863305534713, 0.44360322873237156838, 0.025224012033459614068, -0.40590449389022426052, 1.1143112752679664723, -0.2161903374887501339, 0.23162703430932926607, -0.32741518794124441216 ,0.47349665037919996813, -0.45920452643889042577, -0.14105785899327966115, 0.031379435557255155875, 0.35720107620842272977, 0.21229694142108621047, -0.20368656129300038993, 0.1738414724904205344, -0.35063776391904794005, -0.6775042296727354918, -0.17173184806768476696, 0.46230394894357262903, 0.14771323500073230139, 0.79802613525304866293};
 	static const float32_t A2[4] = {-0.44486678654834321822, 1.1688121908846942354, 1.0641647684820378927, -0.85051800764122009735};
+	
+	/*//NN19
+	static const float32_t b1[2] = {-1.5661133609240214248,-1.1406531273477942268};
+	static const float32_t b2[2] = {0.45140415789782178946, -0.33536239791663619014};
+	static const float32_t A1[48] = {-0.55748386160543517143, -0.57036234155843101856, -0.72284137160577877079, -0.37548718467370523211, 0.36092292882579729563, -0.28514245081754102662, 0.42497412591292216266, -0.31394693935575268551, -0.17873072483802326937, 0.028673240732607310766, 0.27273497109910088687, -0.034465147575026784665, 0.091280970650085724305, 0.16246837970523822503, 0.42420799994186431103, -0.15650898723919640099, 0.55818619091595422788, -0.077484019070994655798, 0.37656602460363564067, 0.3824602828285871281, 0.26079610729213642539, -0.11807083858732858594, -0.35430291827638149549, -0.79129374012145103912, 0.36830164753197502936, -0.063131979380665392831, 0.10971586066140517901, -0.0037888611171126088117, -0.21410533481169460868, 0.28476284263704798594, -0.024944218677557646047, 0.22302273286132928698, 0.083820500309597908983, -0.17322889054456716562, 0.092818456838724083813, -0.0012995107758748680737, -0.071066923008439336629, -0.025098817661353089309, -0.17133312947158935158, 0.37262776443408884841, 0.074355463504859414803, -0.65961513108826397289, 0.073316542498309864029, -0.21638519063280908794, -0.61801039856739148348, 0.046369015900059235014, -0.65507058233604120723, 0.24374648877628896093};
+	static const float32_t A2[4] = {0.55614365078854488544, 0.48908670100944617865,-1.1617123747462525518, 1.136551899847834779};*/
 	
 	float32_t L1[2]; // Hidden layer outputs
 	float32_t L2[2]; // Output layer outputs
