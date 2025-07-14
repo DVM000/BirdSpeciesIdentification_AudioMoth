@@ -3281,7 +3281,8 @@ static AM_recordingState_t makeRecording(uint32_t timeOfNextRecording, uint32_t 
 		    struct tm *time = gmtime(&rawtime);
 		    char str[24];
 		    sprintf(str, "%04d/%02d/%02d %02d:%02d:%02d.%02lu\n", 
-		                 1900 + time->tm_year, time->tm_mon + 1, time->tm_mday, time->tm_hour, time->tm_min, time->tm_sec, accumulatedMilliseconds % 1000);//, readBuffer);
+		                 1900 + time->tm_year, time->tm_mon + 1, time->tm_mday, time->tm_hour, time->tm_min, time->tm_sec, 
+		                 (accumulatedMilliseconds % 1000) / 10); //, readBuffer); // display only two decimal digits 
         
 		    FIL callfile; //File to keep detections
 		    f_open(&callfile,"calls.txt", FA_OPEN_APPEND | FA_WRITE);
