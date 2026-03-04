@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Procesamiento de múltiples archivos de audio .wav en la carpeta 'audios'
-Autor original: delia
-Modificado: 2025
+Processing multiple .wav audio files in specified folder
+Author: delia
+Modified: 2026
 """
 
 import numpy as np
@@ -10,6 +10,7 @@ import librosa
 import librosa.display
 import scipy.signal
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from scipy.io import wavfile
 from scipy.signal import resample_poly
 import scipy.fftpack
@@ -201,9 +202,44 @@ def NeuralNetworkFunction(X):
     return np.hstack(Y) #if not isinstance(X, list) else Y
 
 # ---------------------- PROCESSING ----------------------
+def group_detections(y, duration, threshold=0.5, timeblock=3.0, operation="binary_any"):
+    """
+    Group binary detections into time-second blocks (ex: 3 seconds), with "any" or "sum" operation;
+     or agregate output confidence with "mean" operation.
+    - y:  array with values in the range [0,1]
+    - threshold: binary threshold to get detections from 'y'.
+    - timeblock: time interval to agregate detections.
+    - operation: 
+        - "binary_any": apply "any" operation to binary detections. 
+        - "binary_sum": apply "sum" operation to binary detections. 
+        - "mean":       apply "mean" operation to output confidence 'y'.
+    """
+    n_frames = duration / len(y)
+    block_size_frames = round(timeblock / n_frames)   # timeblock multiple of n_frames
+    timeblock_adjusted = block_size_frames * n_frames
 
-def process_files(input_dir, output_file, threshold):
- 
+    n_blocks = int(np.floor(len(y) / block_size_frames)) # number of frames per time block
+
+    detections_grouped = []
+
+    for i in range(n_blocks):
+        block = y[i*block_size_frames:(i+1)*block_size_frames]
+        if operation=="binary_any":
+            block = block > threshold
+            detections_grouped.append(1 if np.any(block) else 0) # timeblock classified as 1 if there is any detection in the block
+        if operation=="binary_sum":
+            block = block > threshold
+            detections_grouped.append(np.sum(block)) # return sum of detections in the block
+        if operation=="mean":
+            detections_grouped.append(np.mean(block)) # return average of output confidences     
+        #print(f"Bloque {i}: {y[i*block_size_frames:(i+1)*block_size_frames]} -> mean={np.mean(block)}")
+        
+    return np.array(detections_grouped), timeblock_adjusted # returns aggregated detections (using operation) and timeblock
+
+
+
+def process_files(input_dir, output_file, threshold, plotting=False, operation="binary_any", timeblock=1.0):
+
     # Spectrogram parameters
     fs = 32000
     lwindow = 1024
@@ -213,7 +249,8 @@ def process_files(input_dir, output_file, threshold):
     twindow = lwindow / fs
             
     results = []
-    for filename in os.listdir(input_dir):
+    list_files = sorted(os.listdir(input_dir))
+    for filename in list_files:
         if filename.lower().endswith('.wav') or filename.lower().endswith('.mp3'):
             filepath = os.path.join(input_dir, filename)
             print(f"Processing: {filename}")
@@ -236,40 +273,72 @@ def process_files(input_dir, output_file, threshold):
           
             detect = y > threshold # Threshold
             detections = np.sum(detect) 
-            results.append(f"{filename}, {int(detections)}")
-            print(detections)
             
-            '''nframes = int(spec.shape[1]/2)
-            t1 = np.linspace(0, len(y) * twindow, len(y))
+            detections_block, timeblock_adjusted = group_detections(y, T, threshold, timeblock=timeblock, operation=operation)
+            #detections_block = group_detections(y, T, threshold, timeblock=1.0, operation="binary_any")
+            ##detections_block = group_detections(y, T, threshold, timeblock=0.5, operation="mean")  
+            if operation == "mean":
+                detections_block = detections_block > threshold # in case we use "mean" -> get blocks marked as detection         
+            print(detections, np.sum(detections_block))
             
-            plt.figure()
-            plt.subplot(3, 1, 3)
-            plt.pcolormesh(tspec[:nframes * 2], f, np.log(np.abs(spec[:, :nframes * 2]) + 1e-10), shading='auto')
-            plt.ylabel('Frequency (Hz)')
-            plt.xlabel('Time (s)')
-            plt.ylim([0, 15000])
-
-            plt.subplot(3, 1, 1)
-            plt.plot(t1[:nframes], detect[:nframes], 'g-', linewidth=1.5, label=f'NN output > {threshold}')
-            plt.plot(t1[:nframes], y[:nframes], 'b--', label='NN output')
-            plt.ylim([0, 1])
-            plt.xlabel('Time (s)')
-            plt.ylabel('NN Detection')
-            plt.legend()
-
-            plt.subplot(3, 1, 2)
-            plt.plot(t[:nframes * lwindow], song[:nframes * lwindow])
-            plt.xlabel('Time (s)')
-            plt.ylabel('Amplitude')
-
-            plt.tight_layout()
-            plt.show()
-            plt.savefig(f'fig-{filename}.png')'''
+            results.append(f"{filename}, {int(detections)}, {np.sum(detections_block)}")
+            # Prints: 
+            #     filename, total 32-ms detections, total timeblock-seg detections (aggregated using 'operation' and thresholded with 'threshold'
             
+            # -- plotting figure --
+            if plotting:
+                nframes = int(spec.shape[1]/2)
+                t1 = np.linspace(0, len(y) * twindow, len(y))
+                
+                if operation == "mean":
+                    detections_mean = detections_block
+                    block_size = int(timeblock_adjusted / twindow)  # number of frames per block
+                    t_blocks = np.arange(len(detections_mean)) * timeblock_adjusted  # start time of each block  
+            
+                plt.figure(figsize=(15,7))
+                plt.subplot(3, 1, 3)
+                plt.pcolormesh(tspec[:nframes * 2], f, np.log(np.abs(spec[:, :nframes * 2]) + 1e-10), shading='auto')
+                plt.ylabel('Frequency (Hz)')
+                plt.xlabel('Time (s)')
+                plt.ylim([0, 15000])
+                
+                plt.subplot(3, 1, 1)
+                plt.plot(t1[:nframes], detect[:nframes], 'g-', linewidth=1.0, label=f'NN output > {threshold}')
+                plt.plot(t1[:nframes], y[:nframes], 'b--', label='NN output')
+                if operation == "mean":
+                    for i, val in enumerate(detections_mean):
+                        if val > threshold:
+                            plt.axvspan(t_blocks[i], t_blocks[i]+timeblock_adjusted, color='black', alpha=0.3)
+                darkpatch = mpatches.Patch(color='black', alpha=0.3, label=f'NN average ({timeblock} s) > {threshold}')
+                #plt.step(t_blocks, detections_block, where='post', color='orange', label='Media por bloque (mean)')
+                plt.ylim([0, 1])
+                plt.xlim([0, T])
+                plt.xlabel('Time (s)')
+                plt.ylabel('NN Detection') 
+                if operation == "mean":
+                    plt.legend(handles=[plt.Line2D([], [], color='b', linestyle='--', label='NN output'),
+                    			plt.Line2D([], [], color='g', label=f'NN output > {threshold}'),  
+                        		darkpatch])
+                else:
+                    plt.legend()
+
+                plt.subplot(3, 1, 2)
+                plt.plot(t[:nframes * lwindow], song[:nframes * lwindow])
+                plt.xlabel('Time (s)')
+                plt.ylabel('Amplitude')
+                plt.xlim([0, T])
+
+                plt.tight_layout()
+                plt.show()
+                plt.savefig(f'fig-{filename}.png')
+            # -----
+      
+    print(f"Employed th={threshold}, timeblock={timeblock_adjusted} (adjusted), operation={operation} ")        
     with open(output_file, 'w') as f:
         for line in results:
             f.write(line + '\n')
     print(f"\nResults saved in: {output_file}")
+    print(f"Lines containing: filename, total 32-ms detections, total timeblock-seg detections (aggregated using '{operation}' and thresholded at {threshold}")
 
 # ---------------------- MAIN ----------------------
 
@@ -278,7 +347,13 @@ if __name__ == "__main__":
     parser.add_argument("--i", "--input", dest="input_dir", default='audios', help="Audio folder")
     parser.add_argument("--o", "--output", dest="output_file", default='results.txt', help="Output .txt file")
     parser.add_argument("--min_conf", dest="threshold", type=float, default=0.5, help="Minimum confidence threshold (default=0.5)")
+    parser.add_argument('--plotting', action='store_true', help='Enable plotting (False by default)')
+    parser.add_argument('--operation', choices=['binary_any', 'binary_sum', 'mean'], default='binary_any',
+                    help='Type of operation for detection agrupation. By default: binary_any')
+    parser.add_argument('--timeblock', type=float, default=0.512,
+                    help='Time block duration for operation application. 0.512 s by default.')
     args = parser.parse_args()
 
-    process_files(args.input_dir, args.output_file, args.threshold)
+    process_files(args.input_dir, args.output_file, args.threshold, args.plotting, args.operation, args.timeblock)
+
 

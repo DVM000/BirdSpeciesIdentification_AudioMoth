@@ -3,6 +3,27 @@
 This repository contains MATLAB code and AudioMoth firmware modifications for detecting the presence of the _Falco naumanni_ species using audio recordings collected with AudioMoth device. </br>
 The project integrates data curation, neural network training, and embedded implementation of the trained model on an AudioMoth device.
 
+
+### Citation
+
+
+This repository accompanies the following article [On-site acoustic identification of bird species based on a shallow neural network](https://www.sciencedirect.com/science/article/pii/S1574954126000932)
+
+If you use this repository, please cite:
+
+```bibtex
+@article{VELASCOMONTERO2026103687,
+	title = {On-site acoustic identification of bird species based on a shallow neural network},
+	journal = {Ecological Informatics},
+	pages = {103687},
+	year = {2026},
+	issn = {1574-9541},
+	doi = {https://doi.org/10.1016/j.ecoinf.2026.103687},
+	url = {https://www.sciencedirect.com/science/article/pii/S1574954126000932},
+	author = {Delia Velasco-Montero and Carmen Lozano-Pons and Jorge Fernández-Berni and Giulia Bastianelli},
+}
+```
+
 ---
 
 ## Repository Structure
@@ -93,4 +114,5 @@ This folder contains the code employed for preparing the dataset, training the n
 ## Acknowledgements
 - **AudioMoth Firmware**: Based on the [AudioMoth Basic Firmware](https://github.com/OpenAcousticDevices/AudioMoth-Firmware-Basic).
 - **Open Acoustic Devices**: For their contributions to open-source acoustic monitoring technology.
+
 
