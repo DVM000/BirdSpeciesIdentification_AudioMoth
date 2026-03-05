@@ -41,7 +41,7 @@ The modifications of source code include:
 The modified firmware enables the AudioMoth to:
 1. Record audio.
 2. Process audio segments using the embedded neural network.
-3. Output species presence detection results.
+3. Notify species detection in real-time by activating the green LED, and record the results to a output `.txt` file.
 
 The built binary file `audiomoth_NN.bin`, ready to be flashed to the device, is also included.
 
